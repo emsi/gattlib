@@ -10,3 +10,8 @@ CTestTestfile.cmake
 *.so
 *.swp
 *~
+examples/ble_scan/ble_scan
+examples/discover/discover
+examples/gatttool/gatttool
+examples/hackoort/hackoort
+examples/read_write/read_write
