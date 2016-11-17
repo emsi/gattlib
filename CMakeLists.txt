@@ -45,6 +45,7 @@ set(gattlib_SRCS bluez/attrib/att.c
 # Gattlib files
 list(APPEND gattlib_SRCS src/gattlib_connect.c
                          src/gattlib_discover.c
+                         src/gattlib_discover.c
                          src/gattlib_read_write.c)
 
 # Added Glib support
@@ -71,6 +72,7 @@ target_link_libraries(gattlib ${gattlib_LIBS})
 add_subdirectory(examples/ble_scan)
 add_subdirectory(examples/discover)
 add_subdirectory(examples/read_write)
+add_subdirectory(examples/hackoort)
 add_subdirectory(examples/gatttool)
 
 #
