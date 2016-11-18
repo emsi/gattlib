@@ -8,7 +8,7 @@
 
 #include "gattlib.h"
 
-int debug=1;
+int verbose=1;
 
 unsigned int seq=1;
 
@@ -31,7 +31,7 @@ int check_lock_status(gatt_connection_t* connection)
 	/* read pass status, handle 0x2a */
 	bt_string_to_uuid(&g_uuid, "a8b3fff4-4834-4051-89d0-3de95cddd318"); 
 	len = gattlib_read_char_by_uuid(connection, &g_uuid, &ret, sizeof(ret));
-	if (debug) printf("%02x\n", ret);
+	if (verbose) printf("Lock status: %02x\n", ret);
 	return ret;
 }
 
@@ -44,7 +44,8 @@ char* hackoort_read_characteristic(gatt_connection_t* connection)
 	/* read pass status, handle 0x2a */
 	bt_string_to_uuid(&g_uuid, "a8b3fff2-4834-4051-89d0-3de95cddd318");
 	len = gattlib_read_char_by_uuid(connection, &g_uuid, &ret, sizeof(ret));
-	if (debug) {
+	if (verbose) {
+		printf("Characteristic ");
 		for (i = 0; i < len; i++)
 			printf("%02x ", ret[i]);
 		printf("\n");
@@ -69,13 +70,21 @@ int aa0afc3a8600(gatt_connection_t* connection, hackoort_cmd cmd, char* data, in
 	for (j=0;j<i;j++) {
 			sum+=buffer[j];
 	}
-	buffer[i++]=sum;
-	buffer[i++]='\x0d';
+	buffer[i++]=sum; // checksum
+	buffer[i++]='\x0d'; // terminator?
 
-	for (j=0;j<i;j++) {
-			if (debug) printf("%02x", buffer[j]);
+	if (verbose>2) {
+	    for (j=0;j<i;j++) 
+			printf("%02x", buffer[j]);
+	    printf(" EOF\n");
 	}
-	if (debug) printf(" EOF\n");
+
+	if (verbose) {
+	    printf("CMD: %04x, data: ", *cmd);
+	    for (j=0;j<datalen;j++)
+		printf("%02x ", data[j]);
+	    printf("\n");
+	}
 
 	/* handle 0x21 */
 	ret = gattlib_write_char_by_handle(connection, 0x21, buffer, i);
@@ -86,10 +95,13 @@ int aa0afc3a8600(gatt_connection_t* connection, hackoort_cmd cmd, char* data, in
 
 int hackoort_onoff(gatt_connection_t* connection, unsigned char on)
 {
-    aa0afc3a8600(connection, "\x0a\x01", (void*) &on, 1);
-    // read status!
+    return aa0afc3a8600(connection, "\x0a\x01", (void*) &on, 1);
 }
 
+int hackoort_set_luminance(gatt_connection_t* connection, unsigned char lum)
+{
+    return aa0afc3a8600(connection, "\x0c\x01", (void*) &lum, 1);
+}
 
 
 int main(int argc, char *argv[]) {
@@ -121,12 +133,19 @@ int main(int argc, char *argv[]) {
 	/* read pass status */
 	check_lock_status(connection);
 
-	hackoort_read_characteristic(connection);
 	hackoort_onoff(connection, 0);
-
-	sleep (3);
 	hackoort_read_characteristic(connection);
+
+	sleep (2);
 	hackoort_onoff(connection,1);
+	hackoort_read_characteristic(connection);
+
+
+	for (i=0x0b; i>1; i--) {
+	    hackoort_set_luminance(connection, i);
+	    hackoort_read_characteristic(connection);
+	    usleep(10000);
+	}
 
 	gattlib_disconnect(connection);
 	return 0;
