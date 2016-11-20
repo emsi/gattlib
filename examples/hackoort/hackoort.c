@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <stdlib.h>
+#include <endian.h>
 
 #include "gattlib.h"
 
@@ -145,18 +146,19 @@ int aa0afc3a8600(hackoort_cmd cmd, char* data, int datalen)
 	buffer[i++]=sum; // checksum
 	buffer[i++]='\x0d'; // terminator?
 
-	if (verbose>2) {
+	if (verbose>1) {
+	    printf("CMD: %02x%02x, data:", cmd[0],cmd[1]);
+	    for (j=0;j<datalen;j++)
+		printf(" %02x", data[j]);
+	    printf(", SEQ: %02x, SUM: %02x\n", seq, sum);
+	}
+	if (verbose>3) {
+	    printf("RAW data: ");
 	    for (j=0;j<i;j++) 
 			printf("%02x", buffer[j]);
-	    printf(" EOF\n");
+	    printf(" EOF datalen: %u\n",datalen);
 	}
 
-	if (verbose>1) {
-	    printf("CMD: %04x, data: ", *cmd);
-	    for (j=0;j<datalen;j++)
-		printf("%02x ", data[j]);
-	    printf("\n");
-	}
 
 	/* handle 0x21 */
 	ret = gattlib_write_char_by_handle(connection, 0x21, buffer, i);
@@ -185,11 +187,25 @@ int hackoort_set_luminance_pct(unsigned char pct)
     return hackoort_set_luminance(lum);
 }
 
+// Take string input like 0x1222 or 0a0406 and return bufer with bytes of such value
+char* read_hex_data(char* str)
+{
+    static uint64_t num;
+    char *data;
+    long unsigned l;
+    sscanf(str, "%12llx", &num);
+    num=htole64(num);
+    data=calloc(num,1);
+    printf("0x%llx %i l: %lx\n", num, num,l);
+    return (char *)&num;
+}
+
 int parse_command(int argc, char** argv)
 {
+	static unsigned short prime=0;
 	unsigned short args=0; // number of arguments for current command including command
 
-	if (verbose >1) printf("COMMAND: %s\n", command);
+	if (verbose >2) printf("EXECUTING COMMAND: %s\n", command);
 
 	if (strcmp(command, "ON") == 0)	
 		hackoort_onoff(1);
@@ -200,13 +216,20 @@ int parse_command(int argc, char** argv)
 		hackoort_set_luminance_pct(strtol(arguments[0],NULL,10));
 		}
 	else if (strcmp(command, "RAW") == 0) {
-		char cmd[2];
-		char data[6];
+		char* cmd; //strtol(arguments[0],NULL,16);
+		char* data;
 		// TODO: 
+		cmd=strdup(read_hex_data(arguments[0]));
+		data=strdup(read_hex_data(arguments[1]));
 		args+=2;
-		aa0afc3a8600(cmd, data, strlen(arguments[1]));
+		aa0afc3a8600(cmd, data, strlen(arguments[1])/2);
+		free(cmd);free(data);
 		}
-	
+	if (!prime) { 
+		prime=1;
+		if (verbose) printf("BUG WORKAROUND, repeating first command\n");
+		parse_command(argc,argv);
+	}
 	optind+=args;
 	// Execute next command in line if any
 	if (optind<argc) {
