@@ -25,7 +25,7 @@
 
 #include "gattlib.h"
 
-short verbose=1,force=0;
+short verbose=1,force=0,dry_run=0;
 
 gatt_connection_t* connection;
 unsigned int seq=1; // oort devices are using sequence numbers for each request
@@ -51,6 +51,7 @@ static void usage() {
 	"                               \n"
 	"  -f, --force                  Try to force operation\n"
 	"  -v, --verbose LEVEL          Be verbose (print more debug)\n"
+	"  --dry-run                    Dry run (do not communicat eover BT)\n"
 	"  -h, --help                   Print this help message\n"
 	"\n");
 	exit (-1);
@@ -65,11 +66,14 @@ int parse_opts(int argc, char **argv)
 		{"password",1,0,'p'},
 		{"force",0,0,'f'},
 		{"verbose",2,0,'v'},
+		{"dry-run",0,0,0},
 		{0,0,0,0}
 	};
 	while ((opt = getopt_long(argc,argv,"hd:p:fv:", loptions, &option_index))!=-1) {
 		switch (opt) {
-			/* set parameters */
+			case 0:
+			    if (!(strcmp("dry-run", loptions[option_index].name)))
+				dry_run=1;
 			case 'f':
 				force=~force;
 				break;
@@ -161,8 +165,10 @@ int aa0afc3a8600(hackoort_cmd cmd, char* data, int datalen)
 
 
 	/* handle 0x21 */
-	ret = gattlib_write_char_by_handle(connection, 0x21, buffer, i);
-	assert(ret == 0);
+	if (!dry_run) {
+	    ret = gattlib_write_char_by_handle(connection, 0x21, buffer, i);
+	    assert(ret == 0);
+	}
 	seq++;
 	return ret;
 }
@@ -188,16 +194,16 @@ int hackoort_set_luminance_pct(unsigned char pct)
 }
 
 // Take string input like 0x1222 or 0a0406 and return bufer with bytes of such value
-char* read_hex_data(char* str)
+char* read_hex_data(char* str,unsigned char len)
 {
     static uint64_t num;
-    char *data;
-    long unsigned l;
-    sscanf(str, "%12llx", &num);
+    long unsigned l=0;
+    l=sscanf(str, "%12llx", &num);
     num=htole64(num);
-    data=calloc(num,1);
-    printf("0x%llx %i l: %lx\n", num, num,l);
-    return (char *)&num;
+    if (verbose>4) printf("HEX: 0x%llx l: %lx \n", num, l);
+    char* const buff = (char*)malloc(len);
+    memcpy(buff,&num,len);
+    return buff;
 }
 
 int parse_command(int argc, char** argv)
@@ -216,13 +222,11 @@ int parse_command(int argc, char** argv)
 		hackoort_set_luminance_pct(strtol(arguments[0],NULL,10));
 		}
 	else if (strcmp(command, "RAW") == 0) {
-		char* cmd; //strtol(arguments[0],NULL,16);
-		char* data;
-		// TODO: 
-		cmd=strdup(read_hex_data(arguments[0]));
-		data=strdup(read_hex_data(arguments[1]));
+		unsigned char len=strlen(arguments[1])/2;
+		char* cmd=read_hex_data(arguments[0],2);
+		char* data=read_hex_data(arguments[1],len);
 		args+=2;
-		aa0afc3a8600(cmd, data, strlen(arguments[1])/2);
+		aa0afc3a8600(cmd, data, len);
 		free(cmd);free(data);
 		}
 	if (!prime) { 
